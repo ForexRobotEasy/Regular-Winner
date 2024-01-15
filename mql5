@@ -1,0 +1,96 @@
+
+// Regular Winner - Trading Robot
+// Developer's Site: forexroboteasy.com
+// Developer: Forex Robot Easy Team
+
+// Include necessary libraries
+#include <Trade\Trade.mqh>
+#include <Arrays\ArrayObj.mqh>
+
+// Define input parameters
+input double FixedLotSize = 0.01; // Fixed lot size for trading
+input ENUM_CALCULATION_METHOD CalculationMethod = CALCULATION_FIXED_LOT; // Calculation method for trading volume
+input double RiskPercentagePerTrade = 2.0; // Percentage of account balance to risk per trade
+input double ProfitTarget = 100.0; // Target profit in account currency
+input double LossTarget = -50.0; // Target loss in account currency
+
+// Define trade variables
+CTrade trade;
+CArrayObj positions;
+
+// Initialize the expert advisor
+int OnInit()
+{
+    // Enable trade execution
+    trade.SetDeviationInPoints(10);
+    trade.SetTypeFilling(ORDER_FILLING_FOK);
+
+    return(INIT_SUCCEEDED);
+}
+
+// Start trading
+void OnTick()
+{
+    // Check if there are any open positions
+    if(positions.Total() == 0)
+    {
+        // Calculate trading volume based on selected method
+        double volume = 0.0;
+        if(CalculationMethod == CALCULATION_FIXED_LOT)
+        {
+            volume = FixedLotSize;
+        }
+        else if(CalculationMethod == CALCULATION_BALANCE)
+        {
+            volume = trade.AccountBalance() * RiskPercentagePerTrade / 100.0;
+        }
+        else if(CalculationMethod == CALCULATION_FREE_FUNDS)
+        {
+            volume = trade.AccountFreeMargin() * RiskPercentagePerTrade / 100.0;
+        }
+        else if(CalculationMethod == CALCULATION_PERCENTAGE_LOSS)
+        {
+            double equity = trade.AccountEquity();
+            double balance = trade.AccountBalance();
+            double percentageLoss = (equity - balance) * RiskPercentagePerTrade / 100.0;
+            volume = percentageLoss * balance / 100.0;
+        }
+
+        // Open a buy position
+        trade.Buy(volume, Symbol(), 0, 0, 0, 0, 0, 'Regular Winner');
+
+        // Add the position to the positions array
+        positions.Add(trade.PositionGetTicket(0));
+    }
+    else
+    {
+        // Loop through all open positions
+        for(int i = positions.Total() - 1; i >= 0; i--)
+        {
+            // Get the position ticket
+            ulong ticket = (ulong)positions[i];
+
+            // Check if the position has reached the profit target
+            if(trade.PositionGetDouble(POSITION_PROFIT, ticket) >= ProfitTarget)
+            {
+                // Close the position
+                trade.PositionClose(ticket);
+                positions.Delete(i);
+            }
+
+            // Check if the position has reached the loss target
+            if(trade.PositionGetDouble(POSITION_PROFIT, ticket) <= LossTarget)
+            {
+                // Close the position
+                trade.PositionClose(ticket);
+                positions.Delete(i);
+            }
+        }
+    }
+}
+
+// Clean up resources
+void OnDeinit(const int reason)
+{
+    positions.Clear();
+}
